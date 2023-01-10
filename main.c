@@ -5,6 +5,7 @@
 #define errorOnParse(v, i) errorWithTokensLeft(__FILE__, __LINE__, (v), (i))
 #define error() \
     do {fprintf(stderr, "%s:%d: error\n", __FILE__, __LINE__); exit(1);} while(0)
+#define safeFree(p) do {if (p) {free(p); (p) = NULL;}} while(0)
 
 typedef enum {
     TokenXXX,
@@ -56,7 +57,7 @@ struct String {
 };
 
 void *safeAlloc(size_t size) {
-    void *mem = malloc(size);
+    void *mem = calloc(1, size);
     if (!mem) {
         fputs("calloc() failed", stderr);
         exit(1);
@@ -70,6 +71,11 @@ TokenVec *newTokenVec(void) {
     obj->cap = 16;
     obj->head = (TokenKind *)safeAlloc(obj->cap * sizeof(TokenKind));
     return obj;
+}
+
+void freeTokenVec(TokenVec **v) {
+    safeFree((*v)->head);
+    safeFree(*v);
 }
 
 void appendToken(TokenVec *v, TokenKind kind) {
@@ -115,6 +121,36 @@ Type *newType(TypeKind kind) {
     return type;
 }
 
+void freeTypeList(TypeList **tl);
+
+void freeType(Type **type) {
+    if (!(*type))
+        return;
+    if ((*type)->baseType)
+        freeType(&(*type)->baseType);
+    if ((*type)->retType)
+        freeType(&(*type)->retType);
+    freeTypeList(&(*type)->argsType);
+    safeFree(*type);
+}
+
+void freeTypeList(TypeList **tl) {
+    if (!(*tl))
+        return;
+    if ((*tl)->next)
+        freeTypeList(&(*tl)->next);
+    freeType(&(*tl)->type);
+    safeFree(*tl);
+}
+
+void copyType(Type *lhs, Type *rhs) {
+    memcpy(lhs, rhs, sizeof(Type));
+}
+
+void clearType(Type *type) {
+    memset(type, 0, sizeof(Type));
+}
+
 String *newString(void) {
     String *obj = (String *)safeAlloc(sizeof(String));
     obj->size = 0;
@@ -122,6 +158,11 @@ String *newString(void) {
     obj->string = (char *)safeAlloc(obj->cap);
     obj->string[0] = '\0';
     return obj;
+}
+
+void *freeString(String **s) {
+    safeFree((*s)->string);
+    safeFree(*s);
 }
 
 void appendString(String *s, const char *append) {
@@ -194,25 +235,18 @@ TokenVec *tokenize(const char *code) {
 }
 
 Type *getTypeFromToken(TokenKind kind) {
-    static Type tVoid = {.kind = TypeVoid};
-    static Type tInt = {.kind = TypeInt};
-    static Type tChar = {.kind = TypeChar};
-    static Type tFloat = {.kind = TypeFloat};
     switch (kind) {
     case TokenVoid:
-        return &tVoid;
+        return newType(TypeVoid);
     case TokenInt:
-        return &tInt;
+        return newType(TypeInt);
     case TokenChar:
-        return &tChar;
+        return newType(TypeChar);
     case TokenFloat:
-        return &tFloat;
+        return newType(TypeFloat);
     }
     return NULL;
 }
-
-Type *parseFuncType(TokenVec *v, int *index, Type *retType);
-TypeList *parseFuncArgTypes(TokenVec *v, int *index);
 
 void errorWithTokensLeft(const char *file, int line, TokenVec *v, int i) {
     String *s = newString();
@@ -230,112 +264,69 @@ int isFunctionPointer(Type *type) {
     return type->kind == TypeFunction;
 }
 
-Type *parseType(TokenVec *v, int *index) {
-    Type *type;
-    int i = *index;
+Type *parseBaseType(TokenVec *v, int *index);
+Type *parseMainType(TokenVec *v, int *index, Type *baseType);
+TypeList *parseFuncArgTypes(TokenVec *v, int *index);
 
-    type = getTypeFromToken(v->head[i++]);
+Type *parseType(TokenVec *v, int *i) {
+    Type *baseType = parseBaseType(v, i);
+    Type *mainType = parseMainType(v, i, baseType);
+    if (!mainType)
+        mainType = baseType;
+    return mainType;
+}
+
+Type *parseBaseType(TokenVec *v, int *index) {
+    Type *type = getTypeFromToken(v->head[*index]);
     if (!type)
-        errorOnParse(v, i);
-
-    while (v->head[i] == TokenAsterisk) {
-        Type *tmp;
-        tmp = newType(TypePointer);
-        tmp->baseType = type;
-        type = tmp;
-        i++;
-    }
-
-    if (v->head[i] == TokenXXX)
-        i++;
-    else if (v->head[i] == TokenLParen) {
-        type = parseFuncType(v, &i, type);
-    }
-
-    if (v->head[i] == TokenLParen) {
-        TypeList *argsType;
-
-        argsType = parseFuncArgTypes(v, &i);
-
-        if (isFunctionPointer(type)) {
-            Type *funcType = type;
-            for (;;) {
-                while (funcType->baseType)
-                    funcType = funcType->baseType;
-                if (!funcType->argsType) {
-                    break;
-                } else if (!funcType->retType) {
-                    error();
-                } else if (!isFunctionPointer(funcType->retType)) {
-                    error();
-                } else {
-                    funcType = funcType->retType;
-                }
-            }
-            funcType->argsType = argsType;
-        } else {
-            Type *funcType;
-
-            funcType = newType(TypeFunction);
-            funcType->argsType = argsType;
-            funcType->retType = type;
-
-            type = funcType;
-        }
-    }
-    *index = i;
+        errorOnParse(v, *index);
+    (*index)++;
     return type;
 }
 
-Type *parseFuncType(TokenVec *v, int *index, Type *retType) {
+Type *parseMainType(TokenVec *v, int *index, Type *baseType) {
+    Type *pointerType = baseType;
+    Type *mainType = NULL;
     int i = *index;
-    int ptrDepth = 0;
-    Type **baseType = NULL;
-    Type *type = NULL;
-
-    if (v->head[i++] != TokenLParen)
-        errorOnParse(v, i);
-
-    if (v->head[i] != TokenAsterisk)
-        errorOnParse(v, i);
 
     while (v->head[i] == TokenAsterisk) {
-        ptrDepth++;
+        Type *tmp = newType(TypePointer);
+        tmp->baseType = pointerType;
+        pointerType = tmp;
         i++;
     }
 
-    if (v->head[i] == TokenXXX)
+    if (v->head[i] == TokenXXX) {
         i++;
+    } else if (v->head[i] == TokenLParen) {
+        i++;
+        if (v->head[i] != TokenAsterisk)
+            errorOnParse(v, i);
+        mainType = parseMainType(v, &i, pointerType);
+        if (v->head[i] != TokenRParen)
+            errorOnParse(v, i);
+        i++;
+    }
+
+    if (!mainType)
+        mainType = pointerType;
+
+    if (i >= v->size) {
+        *index = i;
+        return mainType;
+    }
 
     if (v->head[i] == TokenLParen) {
-        Type *funcType = newType(TypeFunction);
-        funcType->argsType = parseFuncArgTypes(v, &i);
-        funcType->retType = newType(TypeFunction);
-        funcType->retType->retType = retType;
-
-        for (int cnt = 0; cnt < ptrDepth; ++cnt) {
-            Type *save = funcType->retType;
-            funcType->retType = newType(TypePointer);
-            funcType->retType->baseType = save;
-        }
-
-        type = funcType;
-    } else {
-        type = newType(TypeFunction);
-        type->retType = retType;
-
-        for (int cnt = 0; cnt < ptrDepth; ++cnt) {
-            Type *save = type;
-            type = newType(TypePointer);
-            type->baseType = save;
-        }
+        Type *save = newType(pointerType->kind);
+        copyType(save, pointerType);
+        clearType(pointerType);
+        pointerType->kind = TypeFunction;
+        pointerType->argsType = parseFuncArgTypes(v, &i);
+        pointerType->retType = save;
     }
 
-    if (v->head[i++] != TokenRParen)
-        errorOnParse(v, i);
-
     *index = i;
-    return type;
+    return mainType;
 }
 
 TypeList *parseFuncArgTypes(TokenVec *v, int *index) {
@@ -414,17 +405,18 @@ void buildTypeString(const Type *type, String *s) {
 
 String *parse(const char *code) {
     int i = 0;
-    String *s;
+    String *s = newString();
     TokenVec *v;
     Type *type;
 
     v = tokenize(code);
     type = parseType(v, &i);
+    freeTokenVec(&v);
     if (!type) {
         fputs("Failed to parse\n", stderr);
         return s;
     }
-    s = newString();
+
     buildTypeString(type, s);
     trimSuffSpaces(s);
     return s;
@@ -436,17 +428,18 @@ void assert(const char *in, const char *out) {
     if (strcmp(result->string, out) == 0) {
         puts(result->string);
     } else {
-        puts("not ok: Expect, Got:");
+        printf("%s ... not ok: Expect, Got:\n", result->string);
         printf("  - %s\n", out);
         printf("  - %s\n", result->string);
     }
-    free(result->string);
-    free(result);
+    freeString(&result);
 }
 
 int main(void) {
     assert("int XXX", "int");
     assert("int XXX(void)", "func(void) int");
+    assert("int *XXX", "*int");
+    assert("int *XXX(void)", "func(void) *int");
     assert("int (*XXX)(char)", "*func(char) int");
     assert("int (**XXX)(char)", "**func(char) int");
     assert("int (*XXX)(float, char (*)(int, int *))", "*func(float, *func(int, *int) char) int");

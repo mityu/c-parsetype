@@ -6,7 +6,7 @@ XXX
     }
 
 XXX(args)
-    -> basetype
+    -> func(args) basetype
 
     {
         kind: TypeFunction
@@ -47,7 +47,7 @@ XXX(args)
     }
 
 (*XXX(args1))(args)
-    -> *XXX(args1) (basetype' = func(args) basetype)
+    -> *XXX(args1) (basetype' = func(args(= NULL)) basetype)
 
     {
         kind: TypeFunction
