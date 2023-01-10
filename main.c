@@ -171,7 +171,7 @@ void appendString(String *s, const char *append) {
     s->string[s->size] = '\0';
 }
 
-void trimSuffSpaces(String *s) {
+void trimSufSpaces(String *s) {
     int i = s->size - 1;
     while (i >= 0 && s->string[i] == ' ')
         --i;
@@ -380,12 +380,12 @@ void buildTypeString(const Type *type, String *s) {
                 buildTypeString(tl->type, s);
                 if (!tl->next)
                     break;
-                trimSuffSpaces(s);
+                trimSufSpaces(s);
                 appendString(s, ", ");
                 tl = tl->next;
             }
         }
-        trimSuffSpaces(s);
+        trimSufSpaces(s);
         appendString(s, ") ");
         if (!type->retType)
             error();
@@ -412,7 +412,7 @@ String *parse(const char *code) {
     }
 
     buildTypeString(type, s);
-    trimSuffSpaces(s);
+    trimSufSpaces(s);
     freeType(&type);
     return s;
 }
