@@ -441,4 +441,6 @@ int main(void) {
     assert("int (*XXX(void))(char)", "func(void) *func(char) int");
     assert("int *(*XXX(void))(char)", "func(void) *func(char) *int");
     assert("int *(*XXX(float (*)(int)))(char)", "func(*func(int) float) *func(char) *int");
+    assert("int XXX(void (*)(float (**)(char)))", "func(*func(**func(char) float) void) int");
+    assert("int (**XXX)(void (*)(float (**)(char)))", "**func(*func(**func(char) float) void) int");
 }
