@@ -1,5 +1,6 @@
-functype: main.c
-	gcc -o functype main.c
+TARGET=parsetype
+$(TARGET): main.c
+	gcc -o $(TARGET) main.c
 
-run: functype
-	./functype
+run: $(TARGET)
+	./$(TARGET)
