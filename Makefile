@@ -4,3 +4,6 @@ $(TARGET): main.c
 
 run: $(TARGET)
 	./$(TARGET)
+
+clean:
+	$(RM) $(TARGET)
