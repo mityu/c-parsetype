@@ -143,14 +143,6 @@ void freeTypeList(TypeList **tl) {
     safeFree(*tl);
 }
 
-void copyType(Type *lhs, Type *rhs) {
-    memcpy(lhs, rhs, sizeof(Type));
-}
-
-void clearType(Type *type) {
-    memset(type, 0, sizeof(Type));
-}
-
 String *newString(void) {
     String *obj = (String *)safeAlloc(sizeof(String));
     obj->size = 0;
@@ -160,7 +152,7 @@ String *newString(void) {
     return obj;
 }
 
-void *freeString(String **s) {
+void freeString(String **s) {
     safeFree((*s)->string);
     safeFree(*s);
 }
@@ -244,8 +236,9 @@ Type *getTypeFromToken(TokenKind kind) {
         return newType(TypeChar);
     case TokenFloat:
         return newType(TypeFloat);
+    default:
+        return NULL;
     }
-    return NULL;
 }
 
 void errorWithTokensLeft(const char *file, int line, TokenVec *v, int i) {
@@ -317,9 +310,10 @@ Type *parseMainType(TokenVec *v, int *index, Type *baseType) {
     }
 
     if (v->head[i] == TokenLParen) {
+        static const Type zeroType = {};
         Type *save = newType(pointerType->kind);
-        copyType(save, pointerType);
-        clearType(pointerType);
+        *save = *pointerType;
+        *pointerType = zeroType;
         pointerType->kind = TypeFunction;
         pointerType->argsType = parseFuncArgTypes(v, &i);
         pointerType->retType = save;
