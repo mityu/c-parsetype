@@ -413,6 +413,7 @@ String *parse(const char *code) {
 
     buildTypeString(type, s);
     trimSuffSpaces(s);
+    freeType(&type);
     return s;
 }
 
