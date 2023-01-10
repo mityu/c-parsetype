@@ -1,0 +1,63 @@
+XXX
+    -> basetype
+
+    {
+        kind: basetype
+    }
+
+XXX(args)
+    -> basetype
+
+    {
+        kind: TypeFunction
+        argsType: args
+        retType: basetype
+    }
+
+*XXX
+    -> *basetype
+
+    {
+        kind: TypePointer
+        baseType: NULL
+    }
+
+*XXX(args)
+    -> func(args) *basetype
+
+    {
+        kind: TypeFunction
+        argsType: args
+        retType: {
+            Kind: TypePointer
+            baseType: NULL
+        }
+    }
+
+(*XXX)(args)
+    -> *XXX (basetype' = func(args) basetype)
+
+    {
+        kind: TypePointer
+        baseType: {
+            kind: TypeFunction
+            argsType: args
+            baseType: NULL
+        }
+    }
+
+(*XXX(args1))(args)
+    -> *XXX(args1) (basetype' = func(args) basetype)
+
+    {
+        kind: TypeFunction
+        argsType: args1
+        retType: {
+            kind: TypePointer
+            baseType: {
+                kind: TypeFunction
+                argsType: args
+                retType: NULL
+            }
+        }
+    }
