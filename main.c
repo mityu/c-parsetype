@@ -326,8 +326,6 @@ Type *parseMainType(TokenVec *v, int *index, Type *baseType) {
         i++;
     } else if (v->head[i] == TokenLParen) {
         i++;
-        if (v->head[i] != TokenAsterisk)
-            errorOnParse(v, i);
         mainType = parseMainType(v, &i, baseType);
         if (v->head[i] != TokenRParen)
             errorOnParse(v, i);
@@ -500,7 +498,9 @@ void assert(const char *in, const char *out) {
 
 int main(void) {
     assert("int XXX", "int");
+    assert("int (XXX)", "int");
     assert("int XXX(void)", "func(void) int");
+    assert("int (XXX)(void)", "func(void) int");
     assert("int *XXX", "*int");
     assert("int XXX[3][5][7]", "[3][5][7]int");
     assert("int *XXX[3][5]", "[3][5]*int");
