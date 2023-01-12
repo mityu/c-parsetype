@@ -312,14 +312,13 @@ Type *parseBaseType(TokenVec *v, int *index) {
 }
 
 Type *parseMainType(TokenVec *v, int *index, Type *baseType) {
-    Type *pointerType = baseType;
     Type *mainType = NULL;
     int i = *index;
 
     while (v->head[i] == TokenAsterisk) {
         Type *tmp = newType(TypePointer);
-        tmp->baseType = pointerType;
-        pointerType = tmp;
+        tmp->baseType = baseType;
+        baseType = tmp;
         i++;
     }
 
@@ -329,14 +328,14 @@ Type *parseMainType(TokenVec *v, int *index, Type *baseType) {
         i++;
         if (v->head[i] != TokenAsterisk)
             errorOnParse(v, i);
-        mainType = parseMainType(v, &i, pointerType);
+        mainType = parseMainType(v, &i, baseType);
         if (v->head[i] != TokenRParen)
             errorOnParse(v, i);
         i++;
     }
 
     if (!mainType)
-        mainType = pointerType;
+        mainType = baseType;
 
     if (i >= v->size) {
         *index = i;
@@ -359,17 +358,17 @@ Type *parseMainType(TokenVec *v, int *index, Type *baseType) {
             if (v->head[i++] != TokenRBracket)
                 errorOnParse(v, i);
         }
-        *curType = newType(pointerType->kind);
-        **curType = *pointerType;
-        *pointerType = *arrayType;
+        *curType = newType(baseType->kind);
+        **curType = *baseType;
+        *baseType = *arrayType;
     } else if (v->head[i] == TokenLParen) {
         static const Type zeroType = {};
-        Type *save = newType(pointerType->kind);
-        *save = *pointerType;
-        *pointerType = zeroType;
-        pointerType->kind = TypeFunction;
-        pointerType->argsType = parseFuncArgTypes(v, &i);
-        pointerType->retType = save;
+        Type *save = newType(baseType->kind);
+        *save = *baseType;
+        *baseType = zeroType;
+        baseType->kind = TypeFunction;
+        baseType->argsType = parseFuncArgTypes(v, &i);
+        baseType->retType = save;
     }
 
     *index = i;
