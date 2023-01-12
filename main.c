@@ -17,7 +17,11 @@ typedef enum {
     TokenComma,
     TokenLParen,
     TokenRParen,
-    // TokenEOL,
+    TokenLBracket,
+    TokenRBracket,
+    TokenNum3,
+    TokenNum5,
+    TokenNum7,
 } TokenKind;
 
 typedef struct TokenVec TokenVec;
@@ -33,6 +37,7 @@ typedef enum {
     TypeChar,
     TypeFloat,
     TypePointer,
+    TypeArray,
     TypeFunction,
 } TypeKind;
 
@@ -43,6 +48,7 @@ struct Type {
     Type *baseType;  // Valid when kind is TypePointer
     TypeList *argsType;  // Valid when kind is TypeFunction
     Type *retType;  // Valid when kind is TypeFunction
+    int arraySize;  // Valid when kind is TypeArray
 };
 struct TypeList {
     TypeList *next;
@@ -109,9 +115,18 @@ const char *tokenToString(TokenKind token) {
             return "(";
         case TokenRParen:
             return ")";
+        case TokenLBracket:
+            return "[";
+        case TokenRBracket:
+            return "]";
+        case TokenNum3:
+            return "3";
+        case TokenNum5:
+            return "5";
+        case TokenNum7:
+            return "7";
         default:
-            fputs("Unreachable", stderr);
-            exit(1);
+            error();
     }
 }
 
@@ -205,8 +220,18 @@ TokenVec *tokenize(const char *code) {
             appendToken(v, TokenLParen);
         } else if (*p == ')') {
             appendToken(v, TokenRParen);
+        } else if (*p == '[') {
+            appendToken(v, TokenLBracket);
+        } else if (*p == ']') {
+            appendToken(v, TokenRBracket);
         } else if (*p == ',') {
             appendToken(v, TokenComma);
+        } else if (*p == '3') {
+            appendToken(v, TokenNum3);
+        } else if (*p == '5') {
+            appendToken(v, TokenNum5);
+        } else if (*p == '7') {
+            appendToken(v, TokenNum7);
         } else if (matchIdent(&p, "XXX")) {
             appendToken(v, TokenXXX);
         } else if (matchIdent(&p, "void")) {
@@ -238,6 +263,15 @@ Type *getTypeFromToken(TokenKind kind) {
         return newType(TypeFloat);
     default:
         return NULL;
+    }
+}
+
+int getNumFromToken(TokenKind kind) {
+    switch (kind) {
+    case TokenNum3: return 3;
+    case TokenNum5: return 5;
+    case TokenNum7: return 7;
+    default: return -1;
     }
 }
 
@@ -309,7 +343,26 @@ Type *parseMainType(TokenVec *v, int *index, Type *baseType) {
         return mainType;
     }
 
-    if (v->head[i] == TokenLParen) {
+    if (v->head[i] == TokenLBracket) {
+        Type *arrayType = NULL;
+        Type **curType = &arrayType;
+        while (v->head[i] == TokenLBracket) {
+            int arraySize = -1;
+            *curType = newType(TypeArray);
+            arraySize = getNumFromToken(v->head[++i]);
+            if (arraySize < 0)
+                errorOnParse(v, i);
+            (*curType)->arraySize = arraySize;
+            curType = &(*curType)->baseType;
+
+            i++;
+            if (v->head[i++] != TokenRBracket)
+                errorOnParse(v, i);
+        }
+        *curType = newType(pointerType->kind);
+        **curType = *pointerType;
+        *pointerType = *arrayType;
+    } else if (v->head[i] == TokenLParen) {
         static const Type zeroType = {};
         Type *save = newType(pointerType->kind);
         *save = *pointerType;
@@ -391,8 +444,24 @@ void buildTypeString(const Type *type, String *s) {
             error();
         buildTypeString(type->retType, s);
         break;
+    case TypeArray:
+        char numChar = '@';  // Dummy char as bug finder
+        switch (type->arraySize) {
+        case 3: numChar = '3'; break;
+        case 5: numChar = '5'; break;
+        case 7: numChar = '7'; break;
+        default:
+            error();
+        }
+        appendString(s, "[");
+        appendString(s, (char[2]){numChar, '\0'});
+        appendString(s, "]");
+        if (!type->baseType)
+            error();
+        buildTypeString(type->baseType, s);
+        break;
     default:
-        fprintf(stderr, "%s:%d: unreachable", __FILE__, __LINE__);
+        fprintf(stderr, "%s:%d: unreachable\n", __FILE__, __LINE__);
         exit(1);
     }
 }
@@ -434,13 +503,21 @@ int main(void) {
     assert("int XXX", "int");
     assert("int XXX(void)", "func(void) int");
     assert("int *XXX", "*int");
+    assert("int XXX[3][5][7]", "[3][5][7]int");
+    assert("int *XXX[3][5]", "[3][5]*int");
     assert("int *XXX(void)", "func(void) *int");
+    assert("int (**XXX)[3]", "**[3]int");
+    assert("int *(**XXX)[3]", "**[3]*int");
     assert("int (*XXX)(char)", "*func(char) int");
     assert("int (**XXX)(char)", "**func(char) int");
+    assert("int (**XXX[3])(char)", "[3]**func(char) int");
+    assert("int (**XXX[3])[5]", "[3]**[5]int");
     assert("int (*XXX)(float, char (*)(int, int *))", "*func(float, *func(int, *int) char) int");
     assert("int (*XXX(void))(char)", "func(void) *func(char) int");
+    assert("int (*XXX(void))[3][5]", "func(void) *[3][5]int");
     assert("int *(*XXX(void))(char)", "func(void) *func(char) *int");
     assert("int *(*XXX(float (*)(int)))(char)", "func(*func(int) float) *func(char) *int");
     assert("int XXX(void (*)(float (**)(char)))", "func(*func(**func(char) float) void) int");
     assert("int (**XXX)(void (*)(float (**)(char)))", "**func(*func(**func(char) float) void) int");
+    assert("int (**XXX[7])(char (*)(float (**)[3][5]))", "[7]**func(*func(**[3][5]float) char) int");
 }
