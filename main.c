@@ -292,12 +292,12 @@ int isFunctionPointer(Type *type) {
 }
 
 Type *parseBaseType(TokenVec *v, int *index);
-Type *parseMainType(TokenVec *v, int *index, Type *baseType);
+Type *parseAdvancedType(TokenVec *v, int *index, Type *baseType);
 TypeList *parseFuncArgTypes(TokenVec *v, int *index);
 
 Type *parseType(TokenVec *v, int *i) {
     Type *baseType = parseBaseType(v, i);
-    Type *mainType = parseMainType(v, i, baseType);
+    Type *mainType = parseAdvancedType(v, i, baseType);
     if (!mainType)
         mainType = baseType;
     return mainType;
@@ -311,7 +311,7 @@ Type *parseBaseType(TokenVec *v, int *index) {
     return type;
 }
 
-Type *parseMainType(TokenVec *v, int *index, Type *baseType) {
+Type *parseAdvancedType(TokenVec *v, int *index, Type *baseType) {
     Type *mainType = NULL;
     int i = *index;
 
