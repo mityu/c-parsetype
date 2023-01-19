@@ -326,7 +326,7 @@ Type *parseAdvancedType(TokenVec *v, int *index, Type *baseType) {
         i++;
     } else if (v->head[i] == TokenLParen) {
         i++;
-        mainType = parseMainType(v, &i, baseType);
+        mainType = parseAdvancedType(v, &i, baseType);
         if (v->head[i] != TokenRParen)
             errorOnParse(v, i);
         i++;
