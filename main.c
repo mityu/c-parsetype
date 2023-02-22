@@ -32,6 +32,7 @@ struct TokenVec {
 };
 
 typedef enum {
+    TypeNone,
     TypeVoid,
     TypeInt,
     TypeChar,
@@ -298,8 +299,6 @@ TypeList *parseFuncArgTypes(TokenVec *v, int *index);
 Type *parseType(TokenVec *v, int *i) {
     Type *baseType = parseBaseType(v, i);
     Type *mainType = parseAdvancedType(v, i, baseType);
-    if (!mainType)
-        mainType = baseType;
     return mainType;
 }
 
@@ -313,6 +312,7 @@ Type *parseBaseType(TokenVec *v, int *index) {
 
 Type *parseAdvancedType(TokenVec *v, int *index, Type *baseType) {
     Type *mainType = NULL;
+    Type *placeHolder = NULL;
     int i = *index;
 
     while (v->head[i] == TokenAsterisk) {
@@ -326,7 +326,8 @@ Type *parseAdvancedType(TokenVec *v, int *index, Type *baseType) {
         i++;
     } else if (v->head[i] == TokenLParen) {
         i++;
-        mainType = parseAdvancedType(v, &i, baseType);
+        placeHolder = newType(TypeNone);
+        mainType = parseAdvancedType(v, &i, placeHolder);
         if (v->head[i] != TokenRParen)
             errorOnParse(v, i);
         i++;
@@ -336,6 +337,8 @@ Type *parseAdvancedType(TokenVec *v, int *index, Type *baseType) {
         mainType = baseType;
 
     if (i >= v->size) {
+        if (placeHolder)
+            *placeHolder = *baseType;
         *index = i;
         return mainType;
     }
@@ -360,15 +363,16 @@ Type *parseAdvancedType(TokenVec *v, int *index, Type *baseType) {
         **curType = *baseType;
         *baseType = *arrayType;
     } else if (v->head[i] == TokenLParen) {
-        static const Type zeroType = {};
-        Type *save = newType(baseType->kind);
-        *save = *baseType;
-        *baseType = zeroType;
-        baseType->kind = TypeFunction;
-        baseType->argsType = parseFuncArgTypes(v, &i);
-        baseType->retType = save;
+        Type *funcType = newType(TypeFunction);
+        funcType->argsType = parseFuncArgTypes(v, &i);
+        funcType->retType = baseType;
+        baseType = funcType;
     }
 
+    if (placeHolder)
+        *placeHolder = *baseType;
+    else
+        mainType = baseType;
     *index = i;
     return mainType;
 }
@@ -456,6 +460,9 @@ void buildTypeString(const Type *type, String *s) {
         if (!type->baseType)
             error();
         buildTypeString(type->baseType, s);
+        break;
+    case TypeNone:
+        appendString(s, "TypeNone");
         break;
     default:
         fprintf(stderr, "%s:%d: unreachable\n", __FILE__, __LINE__);
